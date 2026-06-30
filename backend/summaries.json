@@ -1,0 +1,22 @@
+{
+  "MACHINE LEARNING(R17A0534)": {
+    "summary": "This document excerpt outlines the lecture notes for a Machine Learning course for B.Tech IV Year - I Semester students, focusing on theoretical knowledge, application of machine learning techniques, and evaluation of algorithms for real-world applications. The course covers various machine learning concepts, including supervised and unsupervised learning, reinforcement learning, genetic algorithms, and ensemble learning. Recommended textbooks and reference materials are provided to support the curriculum.",
+    "tags": [
+      "Machine Learning",
+      "Supervised Learning",
+      "Unsupervised Learning",
+      "Reinforcement Learning",
+      "Genetic Algorithms"
+    ]
+  },
+  "deep learning": {
+    "summary": "\"The Little Book of Deep Learning\" by Fran\u00e7ois Fleuret provides a concise yet comprehensive overview of deep learning concepts, techniques, and applications. The book is structured into sections covering foundational principles, efficient computation, training methodologies, deep model components, architectures, and practical applications in prediction and synthesis. It is designed to be accessible on mobile devices, making it a handy reference for both beginners and experienced practitioners.",
+    "tags": [
+      "Deep Learning",
+      "Machine Learning",
+      "Neural Networks",
+      "Gradient Descent",
+      "Convolutional Networks"
+    ]
+  }
+}
