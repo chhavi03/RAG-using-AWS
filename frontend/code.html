@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RAG Assistant - Document Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    "secondary-fixed-dim": "#d3b7ff",
+                    "primary-fixed": "#58a8f4",
+                    "on-primary-container": "#002440",
+                    "on-primary-fixed": "#000001",
+                    "primary-dim": "#52a3ee",
+                    "outline": "#6a7688",
+                    "on-secondary-fixed": "#470093",
+                    "tertiary": "#bb9aff",
+                    "primary-container": "#55a5f1",
+                    "surface-container": "#0b1a2b",
+                    "surface-container-high": "#102133",
+                    "surface-tint": "#64b3ff",
+                    "error-dim": "#d7383b",
+                    "on-secondary-container": "#ddc6ff",
+                    "error-container": "#9f0519",
+                    "on-tertiary-container": "#2a0065",
+                    "background": "#030f1d",
+                    "surface-dim": "#030f1d",
+                    "secondary-dim": "#8d51ea",
+                    "on-error-container": "#ffa8a3",
+                    "surface-variant": "#15273b",
+                    "on-tertiary-fixed": "#200051",
+                    "on-surface": "#dae6fa",
+                    "on-secondary": "#2d0062",
+                    "surface-container-highest": "#15273b",
+                    "error": "#ff716c",
+                    "surface-container-lowest": "#000000",
+                    "primary-fixed-dim": "#489be5",
+                    "on-primary-fixed-variant": "#003053",
+                    "on-secondary-fixed-variant": "#6824c3",
+                    "inverse-surface": "#f8f9ff",
+                    "on-surface-variant": "#a0acbf",
+                    "tertiary-fixed-dim": "#b490fd",
+                    "outline-variant": "#3d4959",
+                    "surface-bright": "#1a2d43",
+                    "tertiary-fixed": "#bfa0ff",
+                    "tertiary-dim": "#ae8af7",
+                    "primary": "#64b3ff",
+                    "surface": "#030f1d",
+                    "secondary": "#b486ff",
+                    "on-background": "#dae6fa",
+                    "secondary-fixed": "#dec8ff",
+                    "inverse-on-surface": "#4a5666",
+                    "on-tertiary-fixed-variant": "#461f8a",
+                    "surface-container-low": "#061423",
+                    "on-tertiary": "#380a7c",
+                    "secondary-container": "#5d10b9",
+                    "on-primary": "#003053",
+                    "on-error": "#490006",
+                    "inverse-primary": "#0062a1",
+                    "tertiary-container": "#ae8af7"
+                },
+                borderRadius: {
+                    DEFAULT: "0.25rem",
+                    lg: "0.5rem",
+                    xl: "0.75rem",
+                    full: "9999px"
+                },
+                fontFamily: {
+                    headline: ["Manrope"],
+                    body: ["Inter"],
+                    label: ["Inter"]
+                }
+            }
+        }
+    }
+</script>
+<style>
+    body { font-family: "Inter", sans-serif; }
+    .font-headline { font-family: "Manrope", sans-serif; }
+    .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #030f1d; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #102133; border-radius: 10px; }
+    .glass-grid {
+        background-image:
+            linear-gradient(rgba(100, 179, 255, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(100, 179, 255, 0.05) 1px, transparent 1px);
+        background-size: 28px 28px;
+    }
+
+    /* ── Source card excerpt highlight ─────────────────────────── */
+    .excerpt-highlight {
+        background: linear-gradient(135deg, rgba(100,179,255,0.08), rgba(180,134,255,0.06));
+        border-left: 3px solid #64b3ff;
+        border-radius: 0 8px 8px 0;
+        padding: 10px 14px;
+        margin-top: 8px;
+        position: relative;
+    }
+    .excerpt-highlight::before {
+        content: "Retrieved Context";
+        display: block;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #64b3ff;
+        margin-bottom: 5px;
+    }
+    .excerpt-highlight mark {
+        background: rgba(100,179,255,0.22);
+        color: #dae6fa;
+        border-radius: 3px;
+        padding: 0 2px;
+    }
+
+    /* ── Source badge ───────────────────────────────────────────── */
+    .badge-doc  { background: rgba(100,179,255,0.12); color: #64b3ff; }
+    .badge-page { background: rgba(180,134,255,0.12); color: #b486ff; }
+    .badge-type { background: rgba(100,210,140,0.12); color: #6fdda0; }
+    .badge-score{ background: rgba(255,183,77,0.10);  color: #fbbf24; }
+    .badge-uuid { background: rgba(100,179,255,0.06); color: #6a7688; }
+
+    /* ── Typing dots animation ──────────────────────────────────── */
+    @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+    .typing-dot { display:inline-block; width:5px; height:5px; border-radius:50%;
+                  background:#64b3ff; margin:0 2px; animation:blink 1.4s infinite; }
+    .typing-dot:nth-child(2){ animation-delay:0.2s; }
+    .typing-dot:nth-child(3){ animation-delay:0.4s; }
+
+    /* ── Source card open button ────────────────────────────────── */
+    .open-source-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 5px 12px; border-radius: 9999px; font-size: 11px; font-weight: 600;
+        color: #003053;
+        background: linear-gradient(135deg, #64b3ff, #52a3ee);
+        transition: opacity 0.15s, transform 0.15s;
+        text-decoration: none;
+    }
+    .open-source-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+    /* ── Conversation answer source pill ───────────────────────── */
+    .source-pill {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 8px; border-radius: 9999px;
+        font-size: 10px; font-weight: 600;
+        background: rgba(100,179,255,0.12); color: #64b3ff;
+        border: 1px solid rgba(100,179,255,0.2);
+    }
+</style>
+</head>
+<body class="bg-background text-on-surface selection:bg-primary/30 min-h-screen flex flex-col overflow-x-hidden">
+
+<!-- Background decoration -->
+<div class="fixed inset-0 pointer-events-none">
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(82,163,238,0.16),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(180,134,255,0.12),_transparent_30%)]"></div>
+    <div class="absolute inset-0 glass-grid opacity-60"></div>
+</div>
+
+<!-- Header -->
+<header class="bg-[#030f1d]/90 backdrop-blur flex justify-between items-center w-full px-6 py-4 max-w-full sticky top-0 z-50 border-b border-outline-variant/10">
+    <div class="flex items-center gap-4">
+        <div class="flex flex-col">
+            <h1 class="text-xl font-bold text-white tracking-tight font-headline">RAG Assistant</h1>
+            <p class="text-xs text-slate-400 font-medium">Ask questions from your S3 documents</p>
+        </div>
+        <div class="ml-4 px-3 py-1 rounded-full bg-primary-container/20 border border-primary/20 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-primary animate-pulse" id="statusDot"></span>
+            <span class="text-[10px] font-bold text-primary tracking-widest uppercase" id="statusText">Ready</span>
+        </div>
+    </div>
+    <div class="hidden md:flex items-center gap-2 text-xs text-slate-400">
+        <span class="material-symbols-outlined text-base">cloud_done</span>
+        <span>Flask · Bedrock · OpenSearch · S3</span>
+    </div>
+</header>
+
+<!-- Sidebar -->
+<aside class="h-full w-64 fixed left-0 top-0 hidden md:flex flex-col bg-[#061423]/95 backdrop-blur pt-24 pb-8 px-4 z-40 border-r border-outline-variant/10">
+    <div class="flex items-center gap-3 px-4 mb-10">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
+            <span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+        </div>
+        <div>
+            <p class="text-white font-headline font-bold text-sm">The Curator</p>
+            <p class="text-[10px] text-primary font-medium tracking-wide">AI Assistant Active</p>
+        </div>
+    </div>
+    <nav class="flex-1 space-y-2">
+        <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#0b1a2b] text-[#64b3ff] font-medium transition-all" id="newChatButton" type="button">
+            <span class="material-symbols-outlined text-xl">add_box</span>
+            <span class="text-sm">New Chat</span>
+        </button>
+        <div class="px-4 py-3 rounded-xl text-slate-400 bg-surface-container-low border border-outline-variant/10">
+            <p class="text-[10px] uppercase tracking-[0.2em] mb-2">Session</p>
+            <p class="text-sm text-white font-medium">Source tracking on</p>
+            <p class="text-xs text-slate-500 mt-1">Every answer shows document name, page & a direct link.</p>
+        </div>
+        <div class="px-4 py-3 rounded-xl text-slate-400 bg-surface-container-low border border-outline-variant/10 mt-2">
+            <p class="text-[10px] uppercase tracking-[0.2em] mb-2">Documents</p>
+            <div id="docList" class="space-y-1 text-xs text-slate-400">
+                <p class="text-slate-600 italic">Loaded from S3</p>
+            </div>
+        </div>
+    </nav>
+    <div class="mt-auto border-t border-outline-variant/10 pt-4 px-4">
+        <p class="text-[11px] text-slate-500 leading-relaxed">Sources highlighted in blue. Click "Open Source" to view the exact PDF page.</p>
+    </div>
+</aside>
+
+<!-- Main content -->
+<main class="flex-1 md:ml-64 flex flex-col md:flex-row gap-6 p-6 max-w-[1600px] w-full mx-auto relative z-10">
+
+    <!-- Left: query + conversation -->
+    <section class="flex-1 flex flex-col gap-6 min-w-0">
+
+        <!-- Query box -->
+        <div class="bg-surface-container-low p-6 rounded-2xl border border-outline-variant/5 shadow-2xl shadow-black/20">
+            <div class="flex items-center justify-between gap-4 mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary-fixed-dim" style="font-variation-settings: 'FILL' 1;">contact_support</span>
+                    <h2 class="text-white font-headline font-semibold">Inquiry Portal</h2>
+                </div>
+                <p class="text-xs text-slate-500">Enter sends. Shift+Enter for new line.</p>
+            </div>
+
+            <div class="hidden mb-4 rounded-xl border border-error/30 bg-error-container/20 px-4 py-3 text-sm text-on-error-container" id="errorBanner"></div>
+
+            <div class="relative group">
+                <textarea class="w-full bg-surface-container-highest border-none rounded-xl p-5 text-on-surface placeholder:text-slate-500 focus:ring-2 focus:ring-primary/20 transition-all min-h-[140px] resize-none text-sm leading-relaxed" id="queryInput" placeholder="Ask a question about any of your documents…"></textarea>
+                <div class="absolute bottom-4 right-4 flex items-center gap-3">
+                    <button class="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors" id="clearInputButton" type="button">Clear</button>
+                    <button class="bg-gradient-to-r from-primary to-primary-dim px-6 py-2 rounded-lg text-on-primary font-bold text-sm shadow-lg shadow-primary/20 flex items-center gap-2 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed" id="askButton" type="button">
+                        <span id="askButtonLabel">Ask</span>
+                        <span class="material-symbols-outlined text-sm" id="askButtonIcon">send</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Suggested queries -->
+            <div class="mt-5 flex flex-wrap gap-2">
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-bold w-full mb-1">Suggested Queries</span>
+                <button class="suggestion-chip bg-surface-container-high hover:bg-surface-bright text-secondary text-xs font-medium px-4 py-2 rounded-full border border-outline-variant/10 transition-all flex items-center gap-2" data-query="What is the main topic of the documents?" type="button">
+                    <span class="material-symbols-outlined text-sm">auto_awesome</span>
+                    <span>Main topics</span>
+                </button>
+                <button class="suggestion-chip bg-surface-container-high hover:bg-surface-bright text-secondary text-xs font-medium px-4 py-2 rounded-full border border-outline-variant/10 transition-all flex items-center gap-2" data-query="Summarize the key points from this document." type="button">
+                    <span class="material-symbols-outlined text-sm">summarize</span>
+                    <span>Summarize key points</span>
+                </button>
+                <button class="suggestion-chip bg-surface-container-high hover:bg-surface-bright text-secondary text-xs font-medium px-4 py-2 rounded-full border border-outline-variant/10 transition-all flex items-center gap-2" data-query="What are the important terms or definitions mentioned?" type="button">
+                    <span class="material-symbols-outlined text-sm">label_important</span>
+                    <span>Important terms</span>
+                </button>
+                <button class="suggestion-chip bg-surface-container-high hover:bg-surface-bright text-secondary text-xs font-medium px-4 py-2 rounded-full border border-outline-variant/10 transition-all flex items-center gap-2" data-query="What machine learning algorithms are discussed?" type="button">
+                    <span class="material-symbols-outlined text-sm">model_training</span>
+                    <span>ML algorithms</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Conversation loop -->
+        <div class="bg-surface-container rounded-2xl border border-outline-variant/10 overflow-hidden shadow-2xl min-h-[320px] flex flex-col">
+            <div class="p-5 flex items-center justify-between bg-surface-container-high/50 border-b border-outline-variant/10">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">forum</span>
+                    <h3 class="text-white font-headline font-bold text-sm tracking-tight">Conversation Loop</h3>
+                </div>
+                <span class="text-[11px] uppercase tracking-[0.18em] text-slate-500" id="historyCount">0 turns</span>
+            </div>
+            <div class="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4" id="conversationList">
+                <div class="rounded-2xl border border-dashed border-outline-variant/20 bg-surface-container-low p-5 text-sm text-slate-400" id="emptyState">
+                    Ask your first question to start the loop. Source citations appear automatically.
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-center gap-2 py-4 border-t border-outline-variant/10 mt-auto">
+            <span class="material-symbols-outlined text-slate-500 text-sm">info</span>
+            <p class="text-[11px] text-slate-500 font-medium">Answers are grounded in retrieved document chunks — sources shown with page numbers</p>
+        </div>
+    </section>
+
+    <!-- Right: AI answer + source cards -->
+    <section class="w-full md:w-[460px] lg:w-[520px] flex flex-col gap-6">
+
+        <!-- Latest AI answer -->
+        <div class="bg-surface-container rounded-2xl border border-outline-variant/10 overflow-hidden shadow-2xl">
+            <div class="p-5 flex items-center justify-between bg-surface-container-high/50">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">psychology</span>
+                    <h3 class="text-white font-headline font-bold text-sm tracking-tight">Latest AI Synthesis</h3>
+                </div>
+                <button class="p-1.5 text-slate-400 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed" id="copyAnswerButton" title="Copy answer" type="button">
+                    <span class="material-symbols-outlined text-sm">content_copy</span>
+                </button>
+            </div>
+            <div class="p-6">
+                <div id="thinkingIndicator" class="hidden mb-4 flex items-center gap-3 text-xs text-slate-500">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="ml-1">Thinking…</span>
+                </div>
+                <p class="text-on-surface leading-relaxed text-sm whitespace-pre-wrap" id="answerText">Your latest answer will appear here after you submit a question.</p>
+                <div id="dynamicSuggestions" class="mt-4 flex flex-wrap gap-2 hidden"></div>
+                <div class="mt-4 p-3 rounded-lg bg-surface-container-low border-l-2 border-secondary text-xs text-slate-300 italic" id="answerMeta">
+                    Waiting for a question.
+                </div>
+            </div>
+        </div>
+
+        <!-- Source cards (retrieved context) -->
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center justify-between px-2">
+                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Source Documents</h4>
+                <span class="text-[10px] text-slate-600 font-medium" id="sourceCount">0 sources</span>
+            </div>
+
+            <div class="space-y-3 custom-scrollbar overflow-y-auto max-h-[560px] pr-1" id="sourceList">
+                <div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/10 text-sm text-slate-400">
+                    Source cards will appear here after the first answer.
+                </div>
+            </div>
+
+            <div class="py-2 flex items-center gap-3 px-4">
+                <div class="h-px flex-1 bg-outline-variant/10"></div>
+                <span class="text-[9px] font-bold text-slate-600 uppercase tracking-[0.2em]">Chunks from OpenSearch · Pre-signed S3 links</span>
+                <div class="h-px flex-1 bg-outline-variant/10"></div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- Mobile bottom nav -->
+<nav class="fixed bottom-0 w-full z-50 md:hidden bg-[#030f1d]/95 backdrop-blur border-t border-[#102133]/15 flex justify-around items-center h-16 shadow-2xl shadow-black">
+    <a class="flex flex-col items-center justify-center text-[#64b3ff] font-bold p-2" href="#">
+        <span class="material-symbols-outlined">chat_bubble</span>
+        <span class="font-headline text-[10px] uppercase tracking-widest mt-1">Chat</span>
+    </a>
+    <a class="flex flex-col items-center justify-center text-slate-500 p-2" href="#">
+        <span class="material-symbols-outlined">history</span>
+        <span class="font-headline text-[10px] uppercase tracking-widest mt-1">Loop</span>
+    </a>
+    <a class="flex flex-col items-center justify-center text-slate-500 p-2" href="#">
+        <span class="material-symbols-outlined">source</span>
+        <span class="font-headline text-[10px] uppercase tracking-widest mt-1">Docs</span>
+    </a>
+</nav>
+
+<script>
+    // ── DOM refs ─────────────────────────────────────────────────────────
+    const queryInput        = document.getElementById("queryInput");
+    const askButton         = document.getElementById("askButton");
+    const askButtonLabel    = document.getElementById("askButtonLabel");
+    const askButtonIcon     = document.getElementById("askButtonIcon");
+    const clearInputButton  = document.getElementById("clearInputButton");
+    const newChatButton     = document.getElementById("newChatButton");
+    const errorBanner       = document.getElementById("errorBanner");
+    const conversationList  = document.getElementById("conversationList");
+    const historyCount      = document.getElementById("historyCount");
+    const answerText        = document.getElementById("answerText");
+    const dynamicSuggestions= document.getElementById("dynamicSuggestions");
+    const answerMeta        = document.getElementById("answerMeta");
+    const sourceList        = document.getElementById("sourceList");
+    const sourceCount       = document.getElementById("sourceCount");
+    const statusText        = document.getElementById("statusText");
+    const statusDot         = document.getElementById("statusDot");
+    const copyAnswerButton  = document.getElementById("copyAnswerButton");
+    const thinkingIndicator = document.getElementById("thinkingIndicator");
+
+    // ── App state ────────────────────────────────────────────────────────
+    const state = {
+        loading:       false,
+        turns:         [],
+        latestAnswer:  "",
+        latestSources: [],
+        seenDocs:      new Set(),
+    };
+
+    // ── Utilities ────────────────────────────────────────────────────────
+    function escapeHtml(v) {
+        return String(v)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+    }
+
+    function setStatus(label, variant) {
+        statusText.textContent = label;
+        statusDot.className    = "w-2 h-2 rounded-full";
+        if (variant === "busy") {
+            statusDot.classList.add("bg-secondary", "animate-pulse");
+            statusText.className = "text-[10px] font-bold text-secondary tracking-widest uppercase";
+        } else if (variant === "error") {
+            statusDot.classList.add("bg-error");
+            statusText.className = "text-[10px] font-bold text-error tracking-widest uppercase";
+        } else {
+            statusDot.classList.add("bg-primary", "animate-pulse");
+            statusText.className = "text-[10px] font-bold text-primary tracking-widest uppercase";
+        }
+    }
+
+    function showError(msg) {
+        errorBanner.textContent = msg;
+        errorBanner.classList.remove("hidden");
+    }
+    function clearError() {
+        errorBanner.textContent = "";
+        errorBanner.classList.add("hidden");
+    }
+
+    function setLoading(loading) {
+        state.loading = loading;
+        askButton.disabled   = loading;
+        queryInput.disabled  = loading;
+        askButtonLabel.textContent = loading ? "Thinking…" : "Ask";
+        askButtonIcon.textContent  = loading ? "hourglass_top" : "send";
+        thinkingIndicator.classList.toggle("hidden", !loading);
+        if (loading) setStatus("Working", "busy");
+    }
+
+    // ── Source card builder ──────────────────────────────────────────────
+    function buildSourceCard(src, index) {
+        const card = document.createElement("article");
+        card.className = "bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-hidden transition-all hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5";
+
+        // Header bar with doc name colour strip
+        const headerBg = index % 2 === 0 ? "from-primary/10 to-transparent" : "from-secondary/10 to-transparent";
+        const accentColor = index % 2 === 0 ? "border-primary/40" : "border-secondary/40";
+
+        const excerpt = escapeHtml(src.excerpt || "");
+        const docName = escapeHtml(src.doc_name || "Unknown");
+        const docType = escapeHtml((src.doc_type || "PDF").toUpperCase());
+        const page    = src.page || 0;
+        const chunkId = escapeHtml((src.chunk_id || "").slice(0, 8));
+        const score   = src.score ? (src.score * 100).toFixed(1) : "–";
+        const url     = src.url || null;
+
+        const openBtnHtml = url
+            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="open-source-btn">
+                   <span class="material-symbols-outlined" style="font-size:12px;font-variation-settings:'FILL' 1;">open_in_new</span>
+                   Open Page ${page}
+               </a>`
+            : `<span class="text-[10px] text-slate-600 italic">No URL</span>`;
+
+        card.innerHTML = `
+            <div class="bg-gradient-to-r ${headerBg} px-4 py-3 border-b border-outline-variant/10 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="material-symbols-outlined text-primary text-base" style="font-variation-settings:'FILL' 1;">description</span>
+                    <span class="text-xs font-bold text-white truncate">${docName}</span>
+                </div>
+                <span class="text-[9px] font-bold text-slate-500 shrink-0">SRC ${String(index + 1).padStart(2,"0")}</span>
+            </div>
+
+            <div class="px-4 pt-3 pb-1 flex flex-wrap gap-2">
+                <span class="badge-doc text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                    <span class="material-symbols-outlined" style="font-size:11px;">folder_open</span>
+                    ${docName}
+                </span>
+                <span class="badge-page text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                    <span class="material-symbols-outlined" style="font-size:11px;">bookmark</span>
+                    Page ${page}
+                </span>
+                <span class="badge-type text-[10px] font-bold px-2.5 py-1 rounded-full">${docType}</span>
+                <span class="badge-score text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                    <span class="material-symbols-outlined" style="font-size:11px;">target</span>
+                    ${score}%
+                </span>
+            </div>
+
+            <div class="px-4 pb-1">
+                <div class="excerpt-highlight">
+                    <p class="text-[12px] text-slate-300 leading-relaxed"><mark>${excerpt}</mark></p>
+                </div>
+            </div>
+
+            <div class="px-4 py-3 flex items-center justify-between gap-3 border-t border-outline-variant/5 mt-2">
+                <span class="badge-uuid text-[9px] px-2 py-0.5 rounded font-mono">UUID: ${chunkId}…</span>
+                ${openBtnHtml}
+            </div>
+        `;
+
+        return card;
+    }
+
+    // ── Render helpers ───────────────────────────────────────────────────
+    function updateDocSidebar(sources) {
+        const docListEl = document.getElementById("docList");
+        sources.forEach(s => state.seenDocs.add(s.doc_name));
+
+        if (state.seenDocs.size === 0) {
+            docListEl.innerHTML = `<p class="text-slate-600 italic">Loaded from S3</p>`;
+            return;
+        }
+
+        docListEl.innerHTML = "";
+        let index = 0;
+        state.seenDocs.forEach((name) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "py-1.5 border-b border-outline-variant/10 last:border-0";
+            
+            const docRow = document.createElement("div");
+            docRow.className = "flex items-center justify-between gap-2";
+            docRow.innerHTML = `
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
+                    <span class="text-slate-300 text-xs truncate" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+                </div>
+                <button class="shrink-0 p-1 rounded hover:bg-secondary/20 text-slate-500 hover:text-secondary transition-colors summarize-btn" data-doc="${escapeHtml(name)}" title="Summarize Document">
+                    <span class="material-symbols-outlined text-[14px]">auto_awesome</span>
+                </button>
+            `;
+            
+            const sumContainer = document.createElement("div");
+            sumContainer.className = "hidden mt-2 p-2.5 rounded-lg bg-[#030f1d] border border-outline-variant/5 shadow-inner transition-all";
+            sumContainer.id = "summary-container-" + index;
+            sumContainer.innerHTML = `
+                <div class="flex items-center gap-2 text-secondary mb-1 opacity-70">
+                    <span class="material-symbols-outlined text-[10px] animate-spin">progress_activity</span>
+                    <span class="text-[9px] uppercase tracking-wider font-bold">Summarizing...</span>
+                </div>
+            `;
+            
+            wrapper.appendChild(docRow);
+            wrapper.appendChild(sumContainer);
+            docListEl.appendChild(wrapper);
+            index++;
+        });
+
+        // Add summarize logic
+        docListEl.querySelectorAll(".summarize-btn").forEach((btn, i) => {
+            btn.addEventListener("click", async () => {
+                const docName = btn.dataset.doc;
+                const container = document.getElementById("summary-container-" + i);
+                
+                // Toggle if already loaded
+                if (container.dataset.loaded) {
+                    container.classList.toggle("hidden");
+                    return;
+                }
+                
+                // Show loading
+                container.classList.remove("hidden");
+                
+                try {
+                    const res = await fetch("/api/summarize", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ doc_name: docName })
+                    });
+                    const data = await res.json();
+                    
+                    if (!res.ok) throw new Error(data.error || "Summarization failed");
+                    
+                    const tagsHtml = (data.tags || []).map(t => 
+                        `<span class="px-1.5 py-0.5 rounded text-[9px] bg-secondary/10 text-secondary border border-secondary/20 whitespace-nowrap">${escapeHtml(t)}</span>`
+                    ).join("");
+                    
+                    container.innerHTML = `
+                        <p class="text-[10px] text-slate-300 leading-relaxed mb-2">${escapeHtml(data.summary)}</p>
+                        <div class="flex flex-wrap gap-1">${tagsHtml}</div>
+                    `;
+                    container.dataset.loaded = "true";
+                } catch(err) {
+                    container.innerHTML = `<p class="text-[10px] text-error">${escapeHtml(err.message)}</p>`;
+                    // allow retry
+                    delete container.dataset.loaded;
+                }
+            });
+        });
+    }
+
+    function renderSources(sources) {
+        sourceCount.textContent = `${sources.length} source${sources.length === 1 ? "" : "s"}`;
+
+        if (!sources || !sources.length) {
+            sourceList.innerHTML = `<div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/10 text-sm text-slate-400">No source chunks retrieved.</div>`;
+            return;
+        }
+
+        sourceList.innerHTML = "";
+        sources.forEach((src, i) => {
+            sourceList.appendChild(buildSourceCard(src, i));
+        });
+    }
+
+    function renderLatestAnswer(turn) {
+        if (!turn) {
+            answerText.textContent = "Your latest answer will appear here after you submit a question.";
+            answerMeta.textContent = "Waiting for a question.";
+            dynamicSuggestions.innerHTML = "";
+            dynamicSuggestions.classList.add("hidden");
+            state.latestAnswer     = "";
+            copyAnswerButton.disabled = true;
+            return;
+        }
+
+        answerText.textContent = turn.answer;
+        
+        // Build suggested follow-ups
+        if (turn.suggestions && turn.suggestions.length) {
+            dynamicSuggestions.innerHTML = turn.suggestions.map(s => 
+                `<button class="dyn-suggestion-chip bg-surface-container-high hover:bg-surface-bright text-secondary text-[11px] font-medium px-3 py-1.5 rounded-full border border-secondary/20 transition-all flex items-center gap-1.5" data-query="${escapeHtml(s)}" type="button">
+                    <span class="material-symbols-outlined text-[12px]">reply</span>
+                    <span class="text-left line-clamp-1">${escapeHtml(s)}</span>
+                </button>`
+            ).join("");
+            dynamicSuggestions.classList.remove("hidden");
+            
+            dynamicSuggestions.querySelectorAll(".dyn-suggestion-chip").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    queryInput.value = btn.dataset.query || "";
+                    submitQuery();
+                });
+            });
+        } else {
+            dynamicSuggestions.innerHTML = "";
+            dynamicSuggestions.classList.add("hidden");
+        }
+
+        // Build page summary line
+        const pages = [...new Set(turn.sources.map(s => `p.${s.page}`))].join(", ");
+        const docs  = [...new Set(turn.sources.map(s => s.doc_name))].join(", ");
+        answerMeta.textContent = `${turn.sources.length} source${turn.sources.length === 1 ? "" : "s"} · Pages: ${pages || "–"} · From: ${docs || "–"}`;
+
+        state.latestAnswer = turn.answer;
+        copyAnswerButton.disabled = false;
+    }
+
+    function renderConversation() {
+        historyCount.textContent = state.turns.length === 1 ? "1 turn" : `${state.turns.length} turns`;
+
+        if (!state.turns.length) {
+            conversationList.innerHTML = `
+                <div class="rounded-2xl border border-dashed border-outline-variant/20 bg-surface-container-low p-5 text-sm text-slate-400" id="emptyState">
+                    Ask your first question to start the loop. Source citations appear automatically.
+                </div>`;
+            return;
+        }
+
+        conversationList.innerHTML = "";
+
+        state.turns.forEach((turn, index) => {
+            const wrapper = document.createElement("article");
+            wrapper.className = "rounded-2xl border border-outline-variant/10 bg-surface-container-low p-4 space-y-3";
+
+            // Build source pills for this turn
+            const sourcePills = turn.sources.slice(0, 3).map(s =>
+                `<a href="${escapeHtml(s.url || "#")}" target="_blank" rel="noopener noreferrer"
+                    class="source-pill hover:opacity-80 transition-opacity ${s.url ? "" : "pointer-events-none"}">
+                    <span class="material-symbols-outlined" style="font-size:10px;font-variation-settings:'FILL' 1;">description</span>
+                    ${escapeHtml(s.doc_name)} · p.${s.page}
+                </a>`
+            ).join("");
+            const morePills = turn.sources.length > 3
+                ? `<span class="text-[10px] text-slate-600">+${turn.sources.length - 3} more</span>`
+                : "";
+
+            wrapper.innerHTML = `
+                <div class="flex items-center justify-between gap-4">
+                    <span class="text-[10px] uppercase tracking-[0.18em] text-slate-500">Turn ${index + 1}</span>
+                    <span class="text-[10px] uppercase tracking-[0.18em] text-primary">Completed</span>
+                </div>
+                <div class="rounded-xl bg-surface-container-high p-4">
+                    <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500 mb-2">Question</p>
+                    <p class="text-sm text-white whitespace-pre-wrap">${escapeHtml(turn.question)}</p>
+                </div>
+                <div class="rounded-xl bg-[#091729] p-4 border border-outline-variant/10">
+                    <p class="text-[11px] uppercase tracking-[0.2em] text-slate-500 mb-2">Answer</p>
+                    <p class="text-sm text-slate-200 whitespace-pre-wrap">${escapeHtml(turn.answer)}</p>
+                </div>
+                ${turn.sources.length ? `
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <span class="text-[10px] text-slate-600 uppercase tracking-widest font-bold w-full">Sources</span>
+                    ${sourcePills}
+                    ${morePills}
+                </div>` : ""}
+            `;
+            conversationList.appendChild(wrapper);
+        });
+
+        conversationList.scrollTop = conversationList.scrollHeight;
+    }
+
+    function renderAll() {
+        renderConversation();
+        const latest = state.turns[state.turns.length - 1];
+        renderLatestAnswer(latest || null);
+        renderSources(latest ? latest.sources : []);
+    }
+
+    // ── Main query flow ──────────────────────────────────────────────────
+    async function submitQuery() {
+        const question = queryInput.value.trim();
+        if (!question || state.loading) {
+            if (!question) showError("Please enter a question before asking.");
+            return;
+        }
+
+        clearError();
+        setLoading(true);
+
+        try {
+            const response = await fetch("/query", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query: question }),
+            });
+
+            const raw  = await response.text();
+            const data = raw ? JSON.parse(raw) : {};
+
+            if (!response.ok) throw new Error(data.error || "The backend could not answer this question.");
+
+            const sources = Array.isArray(data.sources) ? data.sources : [];
+
+            state.turns.push({
+                question,
+                answer:  data.answer || "No answer returned.",
+                sources,
+                suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
+            });
+
+            updateDocSidebar(sources);
+            queryInput.value = "";
+            renderAll();
+            setStatus("Ready", "ready");
+        } catch (err) {
+            showError(err.message || "Request failed.");
+            setStatus("Error", "error");
+        } finally {
+            setLoading(false);
+            thinkingIndicator.classList.add("hidden");
+            queryInput.focus();
+        }
+    }
+
+    // ── Event listeners ──────────────────────────────────────────────────
+    queryInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitQuery(); }
+    });
+
+    askButton.addEventListener("click", submitQuery);
+
+    clearInputButton.addEventListener("click", () => {
+        queryInput.value = "";
+        clearError();
+        queryInput.focus();
+    });
+
+    newChatButton.addEventListener("click", () => {
+        state.turns = [];
+        state.latestAnswer = "";
+        state.latestSources = [];
+        clearError();
+        renderAll();
+        renderLatestAnswer(null);
+        renderSources([]);
+        queryInput.value = "";
+        setStatus("Ready", "ready");
+        queryInput.focus();
+    });
+
+    copyAnswerButton.addEventListener("click", async () => {
+        if (!state.latestAnswer) return;
+        try {
+            await navigator.clipboard.writeText(state.latestAnswer);
+            answerMeta.textContent = "Answer copied to clipboard.";
+        } catch {
+            answerMeta.textContent = "Clipboard access not available.";
+        }
+    });
+
+    document.querySelectorAll(".suggestion-chip").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            queryInput.value = btn.dataset.query || "";
+            queryInput.focus();
+        });
+    });
+
+    // ── Init ─────────────────────────────────────────────────────────────
+    renderAll();
+    setStatus("Ready", "ready");
+</script>
+</body>
+</html>

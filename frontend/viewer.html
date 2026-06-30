@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document Viewer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Sora:wght@300;400;600;700&display=swap');
+
+    :root {
+      --bg: #0d0f14;
+      --surface: #13161d;
+      --panel: #1a1e28;
+      --border: #252a38;
+      --accent: #4f8ef7;
+      --accent2: #7c5cfc;
+      --highlight: rgba(255, 213, 79, 0.38);
+      --hl-border: rgba(255, 213, 79, 0.85);
+      --text: #d4d9e8;
+      --muted: #6b738f;
+      --badge-bg: rgba(79, 142, 247, 0.12);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Sora', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── TOP BAR ── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 18px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    #doc-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 300px;
+    }
+
+    .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      background: var(--badge-bg);
+      color: var(--accent);
+      border: 1px solid rgba(79, 142, 247, 0.25);
+      white-space: nowrap;
+    }
+
+    .badge.hl {
+      background: rgba(255, 213, 79, 0.1);
+      color: #ffd54f;
+      border-color: rgba(255, 213, 79, 0.3);
+    }
+
+    .spacer {
+      flex: 1;
+    }
+
+    #page-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #page-controls button {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    #page-controls button:hover {
+      background: var(--border);
+      border-color: var(--accent);
+    }
+
+    #page-controls button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    /* ── MAIN LAYOUT ── */
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── CONTEXT PANEL ── */
+    #context-panel {
+      width: 300px;
+      min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    #context-panel-header {
+      padding: 14px 16px 10px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #context-panel-header::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ffd54f;
+      box-shadow: 0 0 8px rgba(255, 213, 79, 0.6);
+    }
+
+    #context-text {
+      padding: 16px;
+      font-size: 12.5px;
+      line-height: 1.75;
+      color: var(--text);
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    #context-text mark {
+      background: var(--highlight);
+      color: #fff;
+      border-radius: 2px;
+      padding: 0 2px;
+      border-bottom: 1.5px solid var(--hl-border);
+      font-weight: 500;
+    }
+
+    /* ── PDF AREA ── */
+    #pdf-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #1c1f2a;
+    }
+
+    #canvas-wrapper {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 24px;
+      position: relative;
+    }
+
+    #page-container {
+      position: relative;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+      border-radius: 4px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    /* ── TEXT LAYER for highlighting ── */
+    #text-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    #text-layer span {
+      position: absolute;
+      white-space: pre;
+      color: transparent;
+      transform-origin: 0% 0%;
+      cursor: text;
+      pointer-events: auto;
+      user-select: text;
+    }
+
+    .highlight-span {
+      background: var(--highlight) !important;
+      border-radius: 2px;
+      outline: 1.5px solid var(--hl-border);
+      animation: pulse-hl 2s ease-in-out 0.5s 2;
+    }
+
+    @keyframes pulse-hl {
+
+      0%,
+      100% {
+        background: rgba(255, 213, 79, 0.38);
+      }
+
+      50% {
+        background: rgba(255, 213, 79, 0.65);
+      }
+    }
+
+    /* ── LOADER ── */
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 999;
+      transition: opacity 0.4s;
+    }
+
+    #loader.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #loader p {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ── ERROR ── */
+    #error-box {
+      display: none;
+      padding: 32px;
+      text-align: center;
+      color: #ef5350;
+      font-size: 14px;
+    }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    /* ── RESIZE HANDLE ── */
+    #resize-handle {
+      width: 4px;
+      cursor: col-resize;
+      background: var(--border);
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    #resize-handle:hover {
+      background: var(--accent2);
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="loader">
+    <div class="spinner"></div>
+    <p>Loading document…</p>
+  </div>
+
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <span id="doc-title">Document</span>
+    <span class="badge" id="page-badge">Page —</span>
+    <span class="badge hl" id="hl-badge" style="display:none">⬡ Context highlighted</span>
+    <div class="spacer"></div>
+    <div id="page-controls">
+      <button id="prev-btn" disabled>‹</button>
+      <span id="page-info">— / —</span>
+      <button id="next-btn" disabled>›</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <!-- CONTEXT PANEL -->
+    <div id="context-panel">
+      <div id="context-panel-header">Retrieved Context</div>
+      <div id="context-text"><em style="color:var(--muted);font-size:12px;">No context snippet provided.</em></div>
+    </div>
+    <div id="resize-handle"></div>
+
+    <!-- PDF AREA -->
+    <div id="pdf-area">
+      <div id="canvas-wrapper">
+        <div id="page-container">
+          <canvas id="pdf-canvas"></canvas>
+          <div id="text-layer"></div>
+        </div>
+      </div>
+      <div id="error-box">⚠ Could not load document. The link may have expired.</div>
+    </div>
+  </div>
+
+  <script>
+
+    // ── PARSE PARAMS ─────────────────────────────────────────────────────────────
+    const params = new URLSearchParams(location.search);
+    const s3Key = params.get('s3_key') || '';
+    const startPage = parseInt(params.get('page') || '1', 10);
+    const highlight = (params.get('highlight') || '').trim();
+    const docName = params.get('name') || 'Document';
+
+    document.getElementById('doc-title').textContent = docName;
+    document.getElementById('page-badge').textContent = `Page ${startPage}`;
+
+    // PDF is served through Flask proxy — no S3 CORS issues
+    const pdfUrl = s3Key ? `/api/pdf?s3_key=${encodeURIComponent(s3Key)}` : '';
+
+    if (highlight) {
+      document.getElementById('hl-badge').style.display = '';
+      // Show context with the matched phrase highlighted
+      const ctx = document.getElementById('context-text');
+      const plain = decodeURIComponent(highlight);
+      // Build a "context" display just from the highlight param
+      ctx.innerHTML = `<span style="color:var(--muted);font-size:11px;display:block;margin-bottom:8px;">Matched phrase:</span><mark>${escapeHtml(plain)}</mark>`;
+    }
+
+    // Also accept a separate 'excerpt' param for the full context snippet
+    const excerpt = params.get('excerpt');
+    if (excerpt) {
+      const plain = decodeURIComponent(excerpt);
+      const hlPhrase = highlight ? decodeURIComponent(highlight) : '';
+      const ctx = document.getElementById('context-text');
+      if (hlPhrase) {
+        const escaped = escapeHtml(plain);
+        const hlEsc = escapeHtml(hlPhrase);
+        const re = new RegExp(hlEsc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        ctx.innerHTML = escaped.replace(re, m => `<mark>${m}</mark>`);
+      } else {
+        ctx.textContent = plain;
+      }
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── PDF.JS SETUP ─────────────────────────────────────────────────────────────
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    let pdfDoc = null;
+    let curPage = startPage;
+    let rendering = false;
+
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx2d = canvas.getContext('2d');
+    const textLayer = document.getElementById('text-layer');
+    const pageInfo = document.getElementById('page-info');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const loader = document.getElementById('loader');
+    const errorBox = document.getElementById('error-box');
+
+    if (!pdfUrl) {
+      loader.classList.add('hidden');
+      errorBox.style.display = 'block';
+      errorBox.textContent = '⚠ No document URL supplied.';
+    }
+
+    // ── RENDER PAGE ──────────────────────────────────────────────────────────────
+    async function renderPage(num) {
+      if (rendering) return;
+      rendering = true;
+
+      const page = await pdfDoc.getPage(num);
+      const viewport = page.getViewport({ scale: getScale(page) });
+
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      document.getElementById('page-container').style.width = viewport.width + 'px';
+      document.getElementById('page-container').style.height = viewport.height + 'px';
+
+      await page.render({ canvasContext: ctx2d, viewport }).promise;
+
+      // Build text layer
+      textLayer.innerHTML = '';
+      const textContent = await page.getTextContent();
+      const hlWords = highlight ? tokenize(decodeURIComponent(highlight)) : [];
+
+      textContent.items.forEach(item => {
+        const span = document.createElement('span');
+        const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+        const angle = Math.atan2(tx[1], tx[0]);
+
+        span.textContent = item.str;
+        span.style.left = tx[4] + 'px';
+        span.style.top = (tx[5] - item.height * viewport.scale) + 'px';
+        span.style.fontSize = (item.height * viewport.scale) + 'px';
+        span.style.transform = `scaleX(${item.width * viewport.scale / (span.textContent.length * item.height * viewport.scale * 0.56) || 1})`;
+        if (angle) span.style.transform += ` rotate(${-angle}rad)`;
+
+        if (hlWords.length && shouldHighlight(item.str, hlWords)) {
+          span.classList.add('highlight-span');
+        }
+
+        textLayer.appendChild(span);
+      });
+
+      // Scroll to first highlighted span
+      const firstHl = textLayer.querySelector('.highlight-span');
+      if (firstHl) {
+        const wrapper = document.getElementById('canvas-wrapper');
+        const top = parseFloat(firstHl.style.top) - 80;
+        setTimeout(() => wrapper.scrollTo({ top: Math.max(0, top), behavior: 'smooth' }), 300);
+      }
+
+      pageInfo.textContent = `${num} / ${pdfDoc.numPages}`;
+      prevBtn.disabled = num <= 1;
+      nextBtn.disabled = num >= pdfDoc.numPages;
+      curPage = num;
+      rendering = false;
+    }
+
+    function getScale(page) {
+      const vp = page.getViewport({ scale: 1 });
+      const area = document.getElementById('canvas-wrapper');
+      const avail = area.clientWidth - 48;
+      return Math.min(1.8, avail / vp.width);
+    }
+
+    // ── HIGHLIGHT MATCHING ───────────────────────────────────────────────────────
+    function tokenize(s) {
+      return s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+    }
+
+    function shouldHighlight(str, hlWords) {
+      const norm = str.toLowerCase().replace(/[^a-z0-9 ]/g, ' ');
+      // Consider a span highlighted if it contains 2+ consecutive highlight words
+      for (let i = 0; i < hlWords.length - 1; i++) {
+        if (norm.includes(hlWords[i]) && norm.includes(hlWords[i + 1])) return true;
+      }
+      // Or single very specific word (>6 chars)
+      return hlWords.some(w => w.length > 6 && norm.includes(w));
+    }
+
+    // ── LOAD DOC ─────────────────────────────────────────────────────────────────
+    if (pdfUrl) {
+      pdfjsLib.getDocument({ url: pdfUrl }).promise
+        .then(async doc => {
+          pdfDoc = doc;
+          loader.classList.add('hidden');
+          await renderPage(Math.min(startPage, doc.numPages));
+        })
+        .catch(err => {
+          console.error(err);
+          loader.classList.add('hidden');
+          errorBox.style.display = 'block';
+        });
+    }
+
+    // ── CONTROLS ─────────────────────────────────────────────────────────────────
+    prevBtn.addEventListener('click', () => { if (curPage > 1) renderPage(curPage - 1); });
+    nextBtn.addEventListener('click', () => { if (pdfDoc && curPage < pdfDoc.numPages) renderPage(curPage + 1); });
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevBtn.click();
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextBtn.click();
+    });
+
+    // ── RESIZE PANEL ─────────────────────────────────────────────────────────────
+    const handle = document.getElementById('resize-handle');
+    const panel = document.getElementById('context-panel');
+    let dragging = false, startX = 0, startW = 0;
+
+    handle.addEventListener('mousedown', e => {
+      dragging = true; startX = e.clientX; startW = panel.offsetWidth;
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const w = Math.max(180, Math.min(500, startW + e.clientX - startX));
+      panel.style.width = w + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      dragging = false;
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    });
+  </script>
+</body>
+
+</html>
